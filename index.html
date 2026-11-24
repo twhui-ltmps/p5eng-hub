@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P5 Revision Game Centre</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Fredoka & Nunito -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti CDN for Streak Celebration -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Fredoka', 'Nunito', sans-serif;
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        /* 3D Interactive Arcade Buttons */
+        .btn-bounce {
+            transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0px 5px 0px rgba(0, 0, 0, 0.18), 0px 8px 15px rgba(0, 0, 0, 0.12);
+        }
+        .btn-bounce:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0px 8px 0px rgba(0, 0, 0, 0.18), 0px 12px 20px rgba(0, 0, 0, 0.18);
+        }
+        .btn-bounce:active {
+            transform: translateY(3px) scale(0.98);
+            box-shadow: 0px 2px 0px rgba(0, 0, 0, 0.18), 0px 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Game Card Depth Effect */
+        .card-depth {
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 12px 25px -8px rgba(0, 0, 0, 0.14), 0 0 0 4px rgba(255, 255, 255, 0.9);
+        }
+        .card-depth:hover {
+            transform: translateY(-7px) scale(1.015);
+            box-shadow: 0 22px 32px -10px rgba(0, 0, 0, 0.22), 0 0 0 5px rgba(255, 255, 255, 1);
+        }
+
+        /* Floating Sheep Mascot Animation */
+        @keyframes floatSlow {
+            0%, 100% { transform: translateY(0px) translateX(0px); }
+            50% { transform: translateY(-8px) translateX(6px); }
+        }
+        .animate-float {
+            animation: floatSlow 4s ease-in-out infinite;
+        }
+
+        /* Duolingo-style Flame Pulse */
+        @keyframes flameFlicker {
+            0%, 100% { transform: scale(1) rotate(-3deg); }
+            50% { transform: scale(1.18) rotate(4deg); }
+        }
+        .flame-active {
+            display: inline-block;
+            animation: flameFlicker 1.2s ease-in-out infinite;
+        }
+
+        /* Mascot Container */
+        .mascot-container {
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        .mascot-container:hover {
+            transform: scale(1.05) rotate(2deg);
+        }
+        .mascot-container:active {
+            transform: scale(0.95);
+        }
+
+        /* Speech Bubble Arrow Tail */
+        .speech-bubble {
+            position: relative;
+            background: #ffffff;
+            border-radius: 20px;
+            border: 3px solid #8b5cf6;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.06);
+        }
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            left: -14px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-width: 8px 14px 8px 0;
+            border-style: solid;
+            border-color: transparent #ffffff transparent transparent;
+        }
+        .speech-bubble::before {
+            content: '';
+            position: absolute;
+            left: -19px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-width: 10px 16px 10px 0;
+            border-style: solid;
+            border-color: transparent #8b5cf6 transparent transparent;
+        }
+
+        @media (max-width: 768px) {
+            .speech-bubble::after {
+                left: 50%;
+                top: -14px;
+                transform: translateX(-50%);
+                border-width: 0 8px 14px 8px;
+                border-color: transparent transparent #ffffff transparent;
+            }
+            .speech-bubble::before {
+                left: 50%;
+                top: -19px;
+                transform: translateX(-50%);
+                border-width: 0 10px 16px 10px;
+                border-color: transparent transparent #8b5cf6 transparent;
+            }
+        }
+    </style>
+</head>
+<body class="relative flex flex-col min-h-screen justify-between text-gray-800">
+
+    <!-- ==================== 1. TOP NAVIGATION HEADER ==================== -->
+    <header class="sticky top-0 z-30 w-full px-4 md:px-8 py-3 bg-white/95 backdrop-blur-md shadow-md border-b-2 border-purple-100">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            
+            <!-- Left: Home / Return to Home Button + Main Title -->
+            <div class="flex items-center gap-3">
+                <button type="button" onclick="resetHome()" title="Return to Home & Reset Filters"
+                    class="btn-bounce bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-black text-xs md:text-sm px-3.5 py-2.5 rounded-2xl border-2 border-indigo-300 flex items-center gap-1.5">
+                    <span class="text-base">🏠</span>
+                    <span class="hidden sm:inline">Home</span>
+                </button>
+
+                <div class="flex items-center gap-2.5">
+                    <div class="w-10 h-10 bg-gradient-to-tr from-purple-600 to-indigo-500 rounded-2xl flex items-center justify-center shadow-md border-2 border-white transform -rotate-3">
+                        <span class="text-xl">🎮</span>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="text-lg sm:text-2xl md:text-2xl font-black text-purple-700 tracking-wide leading-none">
+                                P5 Revision Game Centre
+                            </h1>
+                            <span class="bg-amber-400 text-amber-950 text-xs font-black px-2 py-0.5 rounded-lg border border-amber-500 shadow-sm">
+                                P5
+                            </span>
+                        </div>
+                        <p class="text-[11px] font-bold text-gray-500 hidden md:block">Interactive English Revision Arcade</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Term Dropdown Selector + Duolingo-style Flame Streak Sign-in -->
+            <div class="flex items-center gap-2.5 sm:gap-3 ml-auto sm:ml-0">
+                
+                <!-- Term Dropdown Selector -->
+                <div class="relative">
+                    <label for="termSelect" class="sr-only">Select Term</label>
+                    <select id="termSelect" onchange="handleTermChange()"
+                        class="appearance-none bg-sky-50 hover:bg-sky-100 text-sky-900 font-black text-xs md:text-sm pl-3.5 pr-8 py-2.5 rounded-2xl border-2 border-sky-300 shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-400 transition">
+                        <option value="ALL">📅 All Terms</option>
+                        <option value="Term 1">📘 Term 1</option>
+                        <option value="Term 2">📗 Term 2</option>
+                        <option value="Term 3">📙 Term 3</option>
+                    </select>
+                    <span class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sky-700 text-xs font-black">▼</span>
+                </div>
+
+                <!-- Duolingo-Style Flame Streak Sign-In Button -->
+                <button type="button" onclick="triggerDailyStreak()" id="streakBtn"
+                    class="btn-bounce bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs md:text-sm px-3.5 py-2 rounded-2xl border-2 border-white flex items-center gap-2">
+                    <span id="flameIcon" class="text-lg md:text-xl">🔥</span>
+                    <div class="text-left leading-tight">
+                        <div id="streakCountText" class="text-xs md:text-sm font-black">0 Day Streak</div>
+                        <div id="streakSubText" class="text-[10px] font-bold text-amber-100">Tap to Sign In!</div>
+                    </div>
+                </button>
+
+            </div>
+        </div>
+    </header>
+
+    <!-- ==================== MAIN CONTENT AREA ==================== -->
+    <main class="relative z-10 container mx-auto px-4 py-5 flex-1 flex flex-col items-center max-w-7xl">
+
+        <!-- Professor Woolly (Sheep Mascot) Banner -->
+        <section class="w-full bg-white/95 backdrop-blur-md rounded-3xl p-4 md:p-5 mb-6 shadow-lg border-4 border-white flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <div class="mascot-container relative animate-float flex-shrink-0" onclick="mascotSpeak()" title="Click Professor Woolly for a motivating quote!">
+                    <svg class="w-24 h-24 md:w-28 md:h-28 filter drop-shadow-md" viewBox="0 0 200 200">
+                        <!-- Sheep Ears -->
+                        <ellipse cx="48" cy="92" rx="20" ry="11" transform="rotate(-25 48 92)" fill="#fde68a" stroke="#d97706" stroke-width="3"/>
+                        <ellipse cx="152" cy="92" rx="20" ry="11" transform="rotate(25 152 92)" fill="#fde68a" stroke="#d97706" stroke-width="3"/>
+
+                        <!-- Fluffy Cloud Wool Outline -->
+                        <circle cx="100" cy="110" r="54" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" />
+                        <circle cx="62" cy="88" r="24" fill="#ffffff" />
+                        <circle cx="138" cy="88" r="24" fill="#ffffff" />
+                        <circle cx="56" cy="128" r="26" fill="#ffffff" />
+                        <circle cx="144" cy="128" r="26" fill="#ffffff" />
+                        <circle cx="80" cy="152" r="24" fill="#ffffff" />
+                        <circle cx="120" cy="152" r="24" fill="#ffffff" />
+                        <circle cx="100" cy="70" r="25" fill="#ffffff" />
+
+                        <!-- Cute Sheep Face -->
+                        <ellipse cx="100" cy="108" rx="37" ry="35" fill="#fef3c7" />
+
+                        <!-- Fluffy Head Wool Tufts -->
+                        <circle cx="86" cy="75" r="12" fill="#ffffff" />
+                        <circle cx="100" cy="71" r="13" fill="#ffffff" />
+                        <circle cx="114" cy="75" r="12" fill="#ffffff" />
+
+                        <!-- Sparkling Eyes -->
+                        <circle cx="85" cy="103" r="6.5" fill="#1e293b" />
+                        <circle cx="115" cy="103" r="6.5" fill="#1e293b" />
+                        <circle cx="83" cy="101" r="2.2" fill="#ffffff" />
+                        <circle cx="113" cy="101" r="2.2" fill="#ffffff" />
+
+                        <!-- Rosy Cheeks -->
+                        <ellipse cx="75" cy="114" rx="6.5" ry="3.8" fill="#fda4af" opacity="0.75" />
+                        <ellipse cx="125" cy="114" rx="6.5" ry="3.8" fill="#fda4af" opacity="0.75" />
+
+                        <!-- Pink Nose & Happy Smile -->
+                        <polygon points="95,113 105,113 100,118" fill="#f472b6" />
+                        <path d="M 92 122 Q 100 129 108 122" stroke="#78350f" stroke-width="2.8" fill="none" stroke-linecap="round" />
+
+                        <!-- Scholar Graduation Cap -->
+                        <polygon points="100,24 140,43 100,62 60,43" fill="#4f46e5" />
+                        <polygon points="81,52 119,52 110,67 90,67" fill="#3730a3" />
+                        <rect x="136" y="43" width="3.5" height="19" fill="#fbbf24" />
+                        <circle cx="137.7" cy="63" r="3" fill="#f59e0b" />
+                    </svg>
+                </div>
+
+                <div class="speech-bubble p-3.5 md:p-4 text-gray-800 max-w-2xl">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <span class="text-sm md:text-base font-black text-purple-600">🐑 Professor Woolly's Motivation Boost</span>
+                        <button type="button" onclick="mascotSpeak()" class="text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold px-2.5 py-0.5 rounded-full transition">
+                            🔊 New Quote
+                        </button>
+                    </div>
+                    <p id="mascotText" class="text-xs md:text-sm font-bold text-gray-700 leading-relaxed">
+                        "Hard work beats talent when talent doesn't work hard. Every P5 revision game you play makes your brain stronger!"
+                    </p>
+                </div>
+            </div>
+
+            <!-- Overall Progress Summary Pill -->
+            <div class="w-full md:w-auto flex md:flex-col justify-between items-center md:items-end bg-purple-50 px-4 py-3 rounded-2xl border-2 border-purple-200 flex-shrink-0">
+                <div class="text-xs font-extrabold text-purple-800 uppercase tracking-wider">Total P5 EXP</div>
+                <div id="totalExpDisplay" class="text-xl md:text-2xl font-black text-purple-600">⚡ 0 EXP</div>
+            </div>
+        </section>
+
+        <!-- ==================== 2. FOUR GAME SECTIONS + ALL TABS ==================== -->
+        <section class="w-full mb-5">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white/80 backdrop-blur-sm p-3 rounded-3xl border-2 border-white shadow-sm">
+                
+                <!-- 4 Category Filter Tabs + All Games -->
+                <div id="categoryTabs" class="flex flex-wrap items-center gap-2">
+                    <button type="button" data-cat="ALL" onclick="setCategory('ALL')"
+                        class="cat-tab btn-bounce px-4 py-2 rounded-2xl font-black text-xs md:text-sm bg-purple-600 text-white border-2 border-purple-300">
+                        🎯 All Games
+                    </button>
+                    <button type="button" data-cat="daily" onclick="setCategory('daily')"
+                        class="cat-tab btn-bounce px-4 py-2 rounded-2xl font-black text-xs md:text-sm bg-white text-gray-700 hover:bg-amber-50 border-2 border-gray-200">
+                        🌟 Daily Challenge
+                    </button>
+                    <button type="button" data-cat="tenses" onclick="setCategory('tenses')"
+                        class="cat-tab btn-bounce px-4 py-2 rounded-2xl font-black text-xs md:text-sm bg-white text-gray-700 hover:bg-sky-50 border-2 border-gray-200">
+                        ⏱️ Tenses
+                    </button>
+                    <button type="button" data-cat="spelling" onclick="setCategory('spelling')"
+                        class="cat-tab btn-bounce px-4 py-2 rounded-2xl font-black text-xs md:text-sm bg-white text-gray-700 hover:bg-emerald-50 border-2 border-gray-200">
+                        🔤 Spelling
+                    </button>
+                    <button type="button" data-cat="grammar" onclick="setCategory('grammar')"
+                        class="cat-tab btn-bounce px-4 py-2 rounded-2xl font-black text-xs md:text-sm bg-white text-gray-700 hover:bg-rose-50 border-2 border-gray-200">
+                        📚 Grammar
+                    </button>
+                </div>
+
+                <!-- Active Filter Status & Count -->
+                <div class="flex items-center justify-between lg:justify-end gap-3 px-2">
+                    <span id="filterSummary" class="text-xs md:text-sm font-extrabold text-gray-600">
+                        Showing 5 games
+                    </span>
+                    <button type="button" onclick="resetHome()" class="text-xs font-black text-purple-600 hover:text-purple-800 underline">
+                        Reset
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== 3. GAME CARDS GRID ==================== -->
+        <section id="gamesGrid" class="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 my-1">
+            <!-- Cards are dynamically injected here by renderGames() -->
+        </section>
+
+        <!-- Empty State Fallback (if a Term + Section filter has 0 games) -->
+        <div id="emptyState" class="hidden w-full max-w-md bg-white/95 rounded-3xl p-8 text-center shadow-xl border-4 border-white my-8">
+            <div class="text-6xl mb-3">🔍</div>
+            <h3 class="text-xl font-black text-gray-800 mb-2">No Games Found Here!</h3>
+            <p class="text-sm font-bold text-gray-600 mb-5">
+                There are no mini-games matching this exact Term and Section combination yet.
+            </p>
+            <button type="button" onclick="resetHome()"
+                class="btn-bounce bg-purple-600 hover:bg-purple-700 text-white font-black text-sm px-6 py-3 rounded-2xl border-2 border-purple-200">
+                🔄 Show All P5 Games
+            </button>
+        </div>
+
+        <!-- Pagination Bar (Automatically appears if > 10 games are added) -->
+        <div id="paginationBar" class="hidden flex items-center justify-center gap-3 mt-8 bg-white/90 px-5 py-2.5 rounded-2xl shadow border-2 border-white">
+            <button type="button" id="prevPageBtn" onclick="changePage(-1)"
+                class="btn-bounce bg-purple-100 hover:bg-purple-200 disabled:opacity-40 text-purple-800 font-black text-xs px-3.5 py-2 rounded-xl">
+                ◀ Prev
+            </button>
+            <span id="pageIndicator" class="text-sm font-black text-gray-700">Page 1 of 1</span>
+            <button type="button" id="nextPageBtn" onclick="changePage(1)"
+                class="btn-bounce bg-purple-100 hover:bg-purple-200 disabled:opacity-40 text-purple-800 font-black text-xs px-3.5 py-2 rounded-xl">
+                Next ▶
+            </button>
+        </div>
+
+    </main>
+
+    <!-- ==================== FOOTER ==================== -->
+    <footer class="relative z-10 w-full py-4 bg-white/75 backdrop-blur-sm text-center text-xs md:text-sm font-bold text-gray-700 border-t border-white/80 mt-8">
+        <p>🏫 P5 Revision Game Centre • Learn, Play & Level Up Your English!</p>
+    </footer>
+
+    <!-- ==================== JAVASCRIPT CONFIGURATION & LOGIC ==================== -->
+    <script>
+        /* =====================================================================
+           HOW STANDALONE MINI-GAME .HTML FILES SYNC SCORES WITH THIS HOME
+           ---------------------------------------------------------------------
+           Place each mini-game folder (e.g., "prepositions.html")
+           in the same root directory as this home file.
+
+           Inside any mini-game's win/game-over script, update localStorage
+           using the game's matching `id` from the GAMES array below:
+
+             const GAME_ID = "p5_prepositions"; // Must match `id` in GAMES
+             const prevBest = parseInt(localStorage.getItem(`p5_highscore_${GAME_ID}`) || "0", 10);
+             if (newScore > prevBest) {
+                 localStorage.setItem(`p5_highscore_${GAME_ID}`, newScore);
+             }
+             const prevExp = parseInt(localStorage.getItem(`p5_exp_${GAME_ID}`) || "0", 10);
+             localStorage.setItem(`p5_exp_${GAME_ID}`, prevExp + earnedExp);
+
+           When the student clicks "Return to Home" (`href="index.html"`) back
+           to this page, the cards and Total P5 EXP header will automatically
+           display their updated scores!
+        ===================================================================== */
+
+        /* =====================================================================
+           TEACHER MINI-GAME CONFIGURATION
+           ---------------------------------------------------------------------
+           Edit any game card below without touching the HTML layout:
+           - id:         Unique ID used to read/save High Score & EXP in localStorage
+           - enabled:    true = show card | false = hide card
+           - term:       "Term 1" | "Term 2" | "Term 3"
+           - category:   "daily" | "tenses" | "spelling" | "grammar"
+           - title:      Main title on the card
+           - subtitle:   Text inside 【 ... 】
+           - emoji:      Large card icon
+           - color:      "sky" | "red" | "emerald" | "amber" | "purple" | "rose"
+           - tags:       Array of short P5 syllabus topic pills
+           - description: Short instruction shown to students
+           - defaultScore / defaultExp: Initial display values before first play
+           - file:       Exact relative .html path in your repository
+        ===================================================================== */
+        const GAMES = [
+            {
+                id: "p5_prepositions",
+                enabled: true,
+                term: "Term 1",
+                category: "grammar",
+                title: "Prepositions Challenge",
+                subtitle: "In / On / At / Phrasal Verbs",
+                emoji: "🧭",
+                color: "rose",
+                tags: ["Prepositions", "Term 1 Grammar"],
+                description: "Choose the accurate preposition to complete each P5 sentence and build your combo streak!",
+                defaultScore: 0,
+                defaultExp: 0,
+                file: "prepositions.html"
+            },
+            {
+                id: "p5_adj_adv",
+                enabled: true,
+                term: "Term 1",
+                category: "grammar",
+                title: "Adjectives & Adverbs",
+                subtitle: "Describing Nouns & Verbs",
+                emoji: "✨",
+                color: "purple",
+                tags: ["Adjectives", "Adverbs", "-ly Forms"],
+                description: "Spot whether the sentence needs an adjective or an adverb to describe actions and nouns accurately!",
+                defaultScore: 0,
+                defaultExp: 0,
+                file: "adj_adv.html"
+            },
+            {
+                id: "p5_tenses",
+                enabled: true,
+                term: "Term 1",
+                category: "tenses",
+                title: "P5 Tenses Mastery",
+                subtitle: "Time Clues & Verbs",
+                emoji: "⏱️",
+                color: "sky",
+                tags: ["Tenses", "Time Markers", "Term 1"],
+                description: "Read the time clues carefully and select the matching verb tense form to score high!",
+                defaultScore: 0,
+                defaultExp: 0,
+                file: "tenses.html"
+            },
+            {
+                id: "p5_irregular_verbs",
+                enabled: true,
+                term: "Term 1",
+                category: "tenses",
+                title: "Irregular Verbs Arena",
+                subtitle: "V1 • V2 • V3 Forms",
+                emoji: "⚡",
+                color: "amber",
+                tags: ["Irregular Verbs", "Past & Participle"],
+                description: "Test your speed and accuracy on tricky P5 irregular past tense and past participle forms!",
+                defaultScore: 0,
+                defaultExp: 0,
+                file: "irregular_verbs.html"
+            },
+            {
+                id: "p5_5a1_4_spelling",
+                enabled: true,
+                term: "Term 1",
+                category: "spelling",
+                title: "5A Units 1–4 Spelling",
+                subtitle: "Term 1 Vocabulary Practice",
+                emoji: "🐝",
+                color: "emerald",
+                tags: ["5A Units 1-4", "Spelling", "Vocab"],
+                description: "Practise spelling key vocabulary from P5 Book 5A Units 1 to 4 without a single letter out of place!",
+                defaultScore: 0,
+                defaultExp: 0,
+                file: "spelling_5a1_4.html"
+            }
+        ];
+
+        /* =====================================================================
+           THEME & CATEGORY LABELS
+        ===================================================================== */
+        const COLOR_THEMES = {
+            sky:     { border: "border-sky-400",     badge: "bg-sky-500",     title: "text-sky-900",     sub: "text-sky-600",     btn: "bg-sky-500 hover:bg-sky-600 border-sky-200" },
+            red:     { border: "border-red-400",     badge: "bg-red-500",     title: "text-red-900",     sub: "text-red-600",     btn: "bg-red-500 hover:bg-red-600 border-red-200" },
+            emerald: { border: "border-emerald-400", badge: "bg-emerald-500", title: "text-emerald-900", sub: "text-emerald-600", btn: "bg-emerald-500 hover:bg-emerald-600 border-emerald-200" },
+            amber:   { border: "border-amber-400",   badge: "bg-amber-500",   title: "text-amber-900",   sub: "text-amber-600",   btn: "bg-amber-500 hover:bg-amber-600 border-amber-200" },
+            purple:  { border: "border-purple-400",  badge: "bg-purple-500",  title: "text-purple-900",  sub: "text-purple-600",  btn: "bg-purple-500 hover:bg-purple-600 border-purple-200" },
+            rose:    { border: "border-rose-400",    badge: "bg-rose-500",    title: "text-rose-900",    sub: "text-rose-600",    btn: "bg-rose-500 hover:bg-rose-600 border-rose-200" }
+        };
+
+        const CATEGORY_LABELS = {
+            daily:    "🌟 Daily Challenge",
+            tenses:   "⏱️ Tenses",
+            spelling: "🔤 Spelling",
+            grammar:  "📚 Grammar"
+        };
+
+        /* =====================================================================
+           APPLICATION STATE & LOCALSTORAGE SYNC
+        ===================================================================== */
+        const CARDS_PER_PAGE = 10; // Preset 10 cards per page
+        let currentTerm = "ALL";
+        let currentCategory = "ALL";
+        let currentPage = 1;
+        let lastQuoteIndex = 0;
+
+        // Read High Score & EXP from localStorage keys: `p5_highscore_<id>` and `p5_exp_<id>`
+        function getGameStats(game) {
+            const savedScore = localStorage.getItem(`p5_highscore_${game.id}`);
+            const savedExp = localStorage.getItem(`p5_exp_${game.id}`);
+            return {
+                highScore: savedScore !== null ? parseInt(savedScore, 10) : (game.defaultScore || 0),
+                exp: savedExp !== null ? parseInt(savedExp, 10) : (game.defaultExp || 0)
+            };
+        }
+
+        function updateTotalExpHeader() {
+            let totalExp = 0;
+            GAMES.filter(g => g.enabled).forEach(game => {
+                totalExp += getGameStats(game).exp;
+            });
+            document.getElementById("totalExpDisplay").innerText = `⚡ ${totalExp.toLocaleString()} EXP`;
+        }
+
+        /* =====================================================================
+           FILTERING & RENDERING GAME CARDS
+        ===================================================================== */
+        function getFilteredGames() {
+            return GAMES.filter(game => {
+                if (!game.enabled) return false;
+                const matchTerm = (currentTerm === "ALL" || game.term === currentTerm);
+                const matchCat = (currentCategory === "ALL" || game.category === currentCategory);
+                return matchTerm && matchCat;
+            });
+        }
+
+        function renderGames() {
+            const grid = document.getElementById("gamesGrid");
+            const emptyState = document.getElementById("emptyState");
+            const paginationBar = document.getElementById("paginationBar");
+            const filterSummary = document.getElementById("filterSummary");
+
+            const filtered = getFilteredGames();
+            const totalItems = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / CARDS_PER_PAGE));
+
+            if (currentPage > totalPages) currentPage = totalPages;
+
+            // Update status label
+            const termLabel = currentTerm === "ALL" ? "All Terms" : currentTerm;
+            const catLabel = currentCategory === "ALL" ? "All Sections" : CATEGORY_LABELS[currentCategory];
+            filterSummary.innerText = `${termLabel} • ${catLabel} (${totalItems} ${totalItems === 1 ? 'game' : 'games'})`;
+
+            // Handle 0 results
+            if (totalItems === 0) {
+                grid.innerHTML = "";
+                emptyState.classList.remove("hidden");
+                paginationBar.classList.add("hidden");
+                return;
+            } else {
+                emptyState.classList.add("hidden");
+            }
+
+            // Slice 10 cards for current page
+            const startIdx = (currentPage - 1) * CARDS_PER_PAGE;
+            const pageGames = filtered.slice(startIdx, startIdx + CARDS_PER_PAGE);
+
+            grid.innerHTML = pageGames.map(game => {
+                const theme = COLOR_THEMES[game.color] || COLOR_THEMES.sky;
+                const stats = getGameStats(game);
+                const catName = CATEGORY_LABELS[game.category] || game.category;
+                const tagsHtml = (game.tags || []).map(t =>
+                    `<span class="bg-slate-100 text-slate-700 font-bold text-[11px] px-2 py-0.5 rounded-md">${t}</span>`
+                ).join("");
+
+                return `
+                    <article class="card-depth bg-white rounded-3xl p-5 border-4 ${theme.border} flex flex-col justify-between relative overflow-hidden group">
+                        
+                        <!-- Top Badges: Term & Category -->
+                        <div class="flex items-center justify-between gap-1.5 mb-3">
+                            <span class="bg-slate-800 text-white font-black text-[11px] px-2.5 py-1 rounded-full shadow-sm">
+                                ${game.term}
+                            </span>
+                            <span class="${theme.badge} text-white font-black text-[11px] px-2.5 py-1 rounded-full shadow-sm">
+                                ${catName}
+                            </span>
+                        </div>
+
+                        <!-- Card Main Body -->
+                        <div>
+                            <div class="text-5xl mb-2.5 transform group-hover:scale-110 transition-transform inline-block">
+                                ${game.emoji}
+                            </div>
+                            <h3 class="text-xl font-black ${theme.title} leading-snug mb-0.5">
+                                ${game.title}
+                            </h3>
+                            <div class="text-xs font-black ${theme.sub} mb-2.5">
+                                【 ${game.subtitle} 】
+                            </div>
+                            <div class="flex flex-wrap gap-1.5 mb-3">
+                                ${tagsHtml}
+                            </div>
+                            <p class="text-xs font-bold text-gray-600 leading-relaxed mb-4">
+                                ${game.description}
+                            </p>
+                        </div>
+
+                        <!-- Bottom Section: High Score / EXP + Direct Link to Standalone .html -->
+                        <div>
+                            <div class="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 mb-3">
+                                <div class="flex items-center gap-1 text-xs font-black text-amber-600" title="Personal High Score">
+                                    <span>🏆</span>
+                                    <span>${stats.highScore.toLocaleString()}</span>
+                                </div>
+                                <div class="h-3.5 w-[1px] bg-slate-300"></div>
+                                <div class="flex items-center gap-1 text-xs font-black text-purple-600" title="Experience Points">
+                                    <span>⚡</span>
+                                    <span>${stats.exp.toLocaleString()} EXP</span>
+                                </div>
+                            </div>
+
+                            <a href="${game.file}"
+                                class="w-full btn-bounce ${theme.btn} text-white font-black text-sm py-2.5 rounded-xl border flex justify-center items-center gap-1.5">
+                                <span>PLAY GAME</span>
+                                <span>🚀</span>
+                            </a>
+                        </div>
+                    </article>
+                `;
+            }).join("");
+
+            // Pagination controls (visible when > 10 games match)
+            if (totalPages > 1) {
+                paginationBar.classList.remove("hidden");
+                document.getElementById("pageIndicator").innerText = `Page ${currentPage} of ${totalPages}`;
+                document.getElementById("prevPageBtn").disabled = (currentPage === 1);
+                document.getElementById("nextPageBtn").disabled = (currentPage === totalPages);
+            } else {
+                paginationBar.classList.add("hidden");
+            }
+        }
+
+        /* =====================================================================
+           FILTER & NAVIGATION CONTROLS
+        ===================================================================== */
+        function handleTermChange() {
+            currentTerm = document.getElementById("termSelect").value;
+            currentPage = 1;
+            renderGames();
+        }
+
+        function setCategory(cat) {
+            currentCategory = cat;
+            currentPage = 1;
+
+            // Update active tab styling
+            document.querySelectorAll(".cat-tab").forEach(btn => {
+                const isSelected = btn.getAttribute("data-cat") === cat;
+                if (isSelected) {
+                    btn.className = "cat-tab btn-bounce px-4 py-2 rounded-2xl font-black text-xs md:text-sm bg-purple-600 text-white border-2 border-purple-300";
+                } else {
+                    btn.className = "cat-tab btn-bounce px-4 py-2 rounded-2xl font-black text-xs md:text-sm bg-white text-gray-700 hover:bg-purple-50 border-2 border-gray-200";
+                }
+            });
+
+            renderGames();
+        }
+
+        function changePage(delta) {
+            currentPage += delta;
+            renderGames();
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        // Home / Return to Home Button Action
+        function resetHome() {
+            currentTerm = "ALL";
+            document.getElementById("termSelect").value = "ALL";
+            setCategory("ALL");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        /* =====================================================================
+           DUOLINGO-STYLE FLAME STREAK SIGN-IN SYSTEM
+        ===================================================================== */
+        function getTodayKey() {
+            const d = new Date();
+            return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+        }
+
+        function getYesterdayKey() {
+            const d = new Date();
+            d.setDate(d.getDate() - 1);
+            return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+        }
+
+        function loadStreakUI() {
+            const streakCount = parseInt(localStorage.getItem("p5_streak_count") || "0", 10);
+            const lastDate = localStorage.getItem("p5_streak_last_date") || "";
+            const today = getTodayKey();
+            const yesterday = getYesterdayKey();
+
+            // Reset visual streak if user missed yesterday and hasn't checked in today
+            let displayCount = streakCount;
+            if (lastDate !== today && lastDate !== yesterday) {
+                displayCount = 0;
+            }
+
+            const countEl = document.getElementById("streakCountText");
+            const subEl = document.getElementById("streakSubText");
+            const flameEl = document.getElementById("flameIcon");
+            const btnEl = document.getElementById("streakBtn");
+
+            countEl.innerText = `${displayCount} Day${displayCount === 1 ? "" : "s"}`;
+
+            if (lastDate === today) {
+                subEl.innerText = "Signed In Today! ✓";
+                flameEl.classList.add("flame-active");
+                btnEl.classList.remove("from-orange-500", "to-amber-500");
+                btnEl.classList.add("from-emerald-500", "to-teal-500");
+            } else {
+                subEl.innerText = "Tap to Keep Flame!";
+                flameEl.classList.remove("flame-active");
+            }
+        }
+
+        function triggerDailyStreak() {
+            const today = getTodayKey();
+            const yesterday = getYesterdayKey();
+            const lastDate = localStorage.getItem("p5_streak_last_date") || "";
+            let streakCount = parseInt(localStorage.getItem("p5_streak_count") || "0", 10);
+
+            if (lastDate === today) {
+                document.getElementById("mascotText").innerText =
+                    `"Awesome! Your 🔥 ${streakCount}-day streak is already lit for today. Play a game to earn more EXP!"`;
+                return;
+            }
+
+            // Consecutive day increments streak; otherwise starts at 1
+            if (lastDate === yesterday) {
+                streakCount += 1;
+            } else {
+                streakCount = 1;
+            }
+
+            localStorage.setItem("p5_streak_count", streakCount);
+            localStorage.setItem("p5_streak_last_date", today);
+
+            loadStreakUI();
+
+            if (typeof confetti === "function") {
+                confetti({
+                    particleCount: 85,
+                    spread: 70,
+                    origin: { y: 0.3 }
+                });
+            }
+
+            document.getElementById("mascotText").innerText =
+                `"Woohoo! You're on a 🔥 ${streakCount}-day revision streak! Keep practicing every day!"`;
+        }
+
+        /* =====================================================================
+           PROFESSOR WOOLLY VOICE & 10 MOTIVATING QUOTES ON HARD WORK
+        ===================================================================== */
+        const MOTIVATING_QUOTES = [
+            "Hard work beats talent when talent doesn't work hard. Every P5 revision game you play makes your brain stronger!",
+            "Success is the sum of small efforts repeated day in and day out. Keep going, P5 superstar!",
+            "Mistakes are proof that you are trying! Learn from every question and watch your EXP grow!",
+            "There are no shortcuts to any place worth going. Your steady practice today brings top marks tomorrow!",
+            "Don't wish it were easier—wish you were better! Every tense and spelling word you master counts!",
+            "Great things never come from comfort zones. Challenge yourself with a harder game today!",
+            "Believe you can and you're halfway there! Professor Woolly is super proud of your hard work!",
+            "Little by little, a little becomes a lot. Ten minutes of revision every day builds unstoppable confidence!",
+            "The expert in anything was once a beginner. Keep practicing and you will master P5 English!",
+            "Dream big, work hard, stay focused, and never give up—you have what it takes to shine!"
+        ];
+
+        function mascotSpeak() {
+            let nextIndex;
+            do {
+                nextIndex = Math.floor(Math.random() * MOTIVATING_QUOTES.length);
+            } while (nextIndex === lastQuoteIndex && MOTIVATING_QUOTES.length > 1);
+
+            lastQuoteIndex = nextIndex;
+            const quote = MOTIVATING_QUOTES[nextIndex];
+            document.getElementById("mascotText").innerText = `"${quote}"`;
+
+            if ("speechSynthesis" in window) {
+                window.speechSynthesis.cancel();
+                const utter = new SpeechSynthesisUtterance(quote);
+                utter.lang = "en-US";
+                utter.rate = 1.0;
+                utter.pitch = 1.25;
+                window.speechSynthesis.speak(utter);
+            }
+        }
+
+        /* =====================================================================
+           INITIALIZE HOME ON PAGE LOAD & TAB RETURN
+        ===================================================================== */
+        window.onload = function () {
+            loadStreakUI();
+            renderGames();
+            updateTotalExpHeader();
+        };
+
+        // Refresh scores automatically if returning via browser back button
+        window.addEventListener("pageshow", function () {
+            renderGames();
+            updateTotalExpHeader();
+        });
+    </script>
+</body>
+</html>

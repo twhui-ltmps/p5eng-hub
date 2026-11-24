@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Feed the Monster! - Book 5A Spelling Challenge</title>
+    
+    <!-- Google Sign-in API -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;900&display=swap');
+
+        body {
+            font-family: 'Nunito', 'Comic Sans MS', sans-serif;
+            background-color: #e0f2fe;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Container exactly matched to reference dimensions and responsive behavior */
+        .game-container {
+            background-color: #ffffff;
+            padding: 24px;
+            border-radius: 35px;
+            border: 5px solid #93c5fd;
+            box-shadow: 0 15px 30px rgba(2, 132, 199, 0.25);
+            width: 100%;
+            max-width: 520px;
+            text-align: center;
+            position: relative;
+            z-index: 10;
+            max-height: 98vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-sizing: border-box;
+        }
+
+        /* Monster Animations */
+        @keyframes chomp {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.25) rotate(-5deg); }
+            100% { transform: scale(1); }
+        }
+        .animate-chomp {
+            animation: chomp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Letter Tile Error Animation */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+        .animate-shake {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        /* Star Stamp Animation */
+        @keyframes stamp {
+            0% { transform: scale(5) rotate(45deg); opacity: 0; }
+            50% { transform: scale(0.8) rotate(-10deg); opacity: 1; }
+            70% { transform: scale(1.1) rotate(5deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        .animate-stamp {
+            animation: stamp 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* Letter Tile Styles */
+        .letter-tile {
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: grab;
+            will-change: transform;
+        }
+        .letter-tile:active {
+            cursor: grabbing;
+        }
+
+        /* Blanks Style */
+        .blank-slot {
+            transition: all 0.3s ease;
+        }
+        .blank-slot.filled {
+            border-bottom-color: transparent;
+            color: #1e3a8a;
+            transform: scale(1.08);
+        }
+    </style>
+</head>
+<body>
+    <script>
+      window.syncP5HomeStats = function(newScore, earnedExp) {
+        try {
+          const gid = "p5_5a1_4_spelling";
+          const s = Math.max(0, Math.round(Number(newScore) || 0));
+          const e = Math.max(0, Math.round(Number(earnedExp) || 0));
+          const prevBest = parseInt(localStorage.getItem("p5_highscore_" + gid) || "0", 10);
+          if (s > prevBest) localStorage.setItem("p5_highscore_" + gid, s);
+          const prevExp = parseInt(localStorage.getItem("p5_exp_" + gid) || "0", 10);
+          localStorage.setItem("p5_exp_" + gid, prevExp + e);
+        } catch (err) { console.warn("Home sync error:", err); }
+      };
+    </script>
+
+
+    <!-- Main Game Box with fixed max width matching reference size -->
+    <div class="game-container my-auto flex flex-col justify-between gap-3">
+
+        <!-- Header / Control Bar -->
+        <div class="w-full flex flex-col gap-2.5 bg-blue-50/60 p-3 rounded-2xl border-2 border-blue-200">
+            
+            <!-- Auth Section -->
+            <div class="flex justify-between items-center border-b border-blue-200 pb-2">
+                <h1 class="text-xl font-black text-blue-600 tracking-wide text-left">Feed the Monster! 👾</h1>
+                
+                <div class="flex items-center gap-2">
+                    <div id="google-btn-container" class="min-h-[36px] flex items-center justify-center"></div>
+                    <div id="user-welcome" class="hidden text-green-600 font-black text-xs sm:text-sm"></div>
+                </div>
+            </div>
+
+            <!-- Chapter Select -->
+            <div class="w-full">
+                <select id="chapter-select" class="w-full bg-white border-2 border-blue-300 text-blue-900 font-bold py-1.5 px-3 rounded-xl focus:outline-none focus:border-blue-500 cursor-pointer text-xs sm:text-sm">
+                    <option value="all">All Chapters (Bk 5A)</option>
+                    <option value="1">Chapter 1: Behavior & Adverbs</option>
+                    <option value="2">Chapter 2: Feelings & Actions</option>
+                    <option value="3">Chapter 3: Clothes & Appearance</option>
+                    <option value="4">Chapter 4: Objects & Materials</option>
+                </select>
+            </div>
+
+            <!-- Mode & Stats Row -->
+            <div class="flex items-center justify-between gap-2 pt-1">
+                <button id="btn-mode" class="bg-indigo-500 hover:bg-indigo-600 text-white font-black px-2.5 py-1.5 rounded-xl border-b-4 border-indigo-700 active:border-b-0 active:translate-y-1 transition-all text-xs">
+                    ⏱️ Mode: Timed (3m)
+                </button>
+
+                <button id="btn-hof" class="bg-yellow-400 hover:bg-yellow-500 text-yellow-950 font-black px-2.5 py-1.5 rounded-xl border-b-4 border-yellow-600 active:border-b-0 active:translate-y-1 transition-all text-xs flex items-center gap-1">
+                    🏆 Leaderboard
+                </button>
+
+                <a href="index.html" class="bg-white hover:bg-blue-100 text-blue-700 font-black px-2.5 py-1.5 rounded-xl border-b-4 border-blue-300 active:border-b-0 active:translate-y-1 transition-all text-xs flex items-center gap-1" style="text-decoration: none;">
+                    🏠 RETURN TO HOME
+                </a>
+
+                <div class="flex items-center gap-1.5">
+                    <div id="timer-box" class="flex items-center gap-1 bg-red-100 px-2.5 py-1 rounded-full border border-red-300 text-red-700 font-black text-xs">
+                        ⏳ <span id="timer-display">03:00</span>
+                    </div>
+
+                    <div class="flex items-center gap-1 bg-blue-100 px-2.5 py-1 rounded-full border border-blue-300">
+                        <span class="text-sm">⭐</span>
+                        <span id="score-display" class="text-sm font-black text-blue-800">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Game Area -->
+        <div class="flex flex-col items-center justify-center my-auto w-full relative py-2">
+            
+            <!-- Star Stamp Overlay -->
+            <div id="reward-overlay" class="absolute inset-0 z-40 flex items-center justify-center pointer-events-none hidden bg-white/70 rounded-3xl">
+                <div id="star-stamp" class="text-8xl filter drop-shadow-xl">🌟</div>
+            </div>
+
+            <!-- Audio Button -->
+            <button id="btn-audio" class="mb-3 bg-purple-500 hover:bg-purple-600 text-white text-base font-bold py-2 px-5 rounded-full shadow-[0_4px_0_#7e22ce] active:shadow-[0_0px_0_#7e22ce] active:translate-y-[4px] transition-all flex items-center gap-2">
+                <span>🔊</span> Hear Word
+            </button>
+
+            <!-- Monster Drop Zone -->
+            <div id="monster-zone" class="text-7xl sm:text-8xl my-2 relative transition-transform duration-200 ease-in-out select-none cursor-pointer">
+                👾
+            </div>
+
+            <!-- Word Blanks -->
+            <div id="blanks-container" class="flex gap-1.5 sm:gap-2 my-2 flex-wrap justify-center min-h-[44px]">
+                <!-- Blanks injected via JS -->
+            </div>
+
+        </div>
+
+        <!-- Draggable Letters Area -->
+        <div id="letters-container" class="w-full bg-blue-100/60 p-3 rounded-2xl border-4 border-dashed border-blue-300 min-h-[110px] flex flex-wrap justify-center items-center gap-2 relative z-10">
+            <!-- Letter tiles injected via JS -->
+        </div>
+
+    </div>
+
+    <!-- Modal: Game Over / Upload Score -->
+    <div id="game-over-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white border-4 border-blue-400 rounded-3xl p-5 max-w-sm w-full text-center shadow-2xl">
+            <h2 class="text-2xl font-black text-blue-600 mb-1">⏰ TIME'S UP!</h2>
+            <p class="text-sm text-gray-700 font-bold mb-3">You fed the monster <span id="final-score" class="text-xl text-yellow-500 font-black">0</span> words!</p>
+            
+            <div id="upload-section" class="bg-blue-50 p-3 rounded-2xl border-2 border-blue-200 mb-3 text-left">
+                <label class="block text-xs font-black text-blue-800 mb-1">Racer Info:</label>
+                <div class="text-xs font-bold text-gray-700 mb-2">Name: <span id="upload-name-display" class="font-black text-blue-600"></span></div>
+                <div class="flex gap-2 mb-1">
+                    <select id="class-select" class="w-1/2 p-2 rounded-xl border-2 border-blue-300 font-bold text-xs focus:outline-none focus:border-blue-500">
+                        <option value="5A">Class 5A</option>
+                        <option value="5B">Class 5B</option>
+                        <option value="5C">Class 5C</option>
+                        <option value="5D">Class 5D</option>
+                        <option value="5E">Class 5E</option>
+                    </select>
+                    <input type="number" id="student-num" min="1" max="40" placeholder="No. (1-40)" class="w-1/2 p-2 rounded-xl border-2 border-blue-300 font-bold text-xs focus:outline-none focus:border-blue-500">
+                </div>
+            </div>
+
+            <div class="flex gap-2">
+                <button id="btn-save-score" onclick="submitScore()" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-black py-2.5 rounded-xl text-xs shadow-md transition-all">Submit Score 🚀</button>
+                <button id="btn-restart" onclick="restartGame()" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-black py-2.5 rounded-xl text-xs shadow-md transition-all">Play Again 🔄</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Hall of Fame -->
+    <div id="hof-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white border-4 border-yellow-400 rounded-3xl p-4 max-w-sm sm:max-w-md w-full text-center shadow-2xl max-h-[85vh] flex flex-col">
+            <h2 class="text-2xl font-black text-yellow-500 mb-2">🏆 HALL OF FAME 🏆</h2>
+            
+            <div class="flex gap-2 mb-2">
+                <select id="filter-chapter" onchange="fetchLeaderboard()" class="w-1/2 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-1.5 font-bold text-xs">
+                    <option value="all">All Chapters</option>
+                    <option value="1">Chapter 1</option>
+                    <option value="2">Chapter 2</option>
+                    <option value="3">Chapter 3</option>
+                    <option value="4">Chapter 4</option>
+                </select>
+
+                <select id="filter-class" onchange="fetchLeaderboard()" class="w-1/2 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-1.5 font-bold text-xs">
+                    <option value="ALL">🌟 All Classes</option>
+                    <option value="5A">5A</option>
+                    <option value="5B">5B</option>
+                    <option value="5C">5C</option>
+                    <option value="5D">5D</option>
+                    <option value="5E">5E</option>
+                </select>
+            </div>
+
+            <div class="overflow-y-auto flex-grow mb-3 border-2 border-yellow-200 rounded-2xl">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-yellow-100 text-yellow-900 border-b-2 border-yellow-200 text-xs">
+                            <th class="p-1.5 text-center">Rank</th>
+                            <th class="p-1.5">Class</th>
+                            <th class="p-1.5 text-center">No.</th>
+                            <th class="p-1.5">Name</th>
+                            <th class="p-1.5 text-center">Score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="hof-table-body" class="font-bold text-gray-700 text-xs divide-y divide-yellow-100">
+                        <!-- Leaderboard Rows -->
+                    </tbody>
+                </table>
+            </div>
+
+            <button id="btn-close-hof" class="bg-yellow-400 hover:bg-yellow-500 text-yellow-950 font-black py-2 rounded-xl text-xs shadow-md transition-all">Back to Game 🎮</button>
+        </div>
+    </div>
+
+    <!-- Google Login Logic -->
+    <script>
+        let currentUser = null; 
+
+        function parseJwt(token) {
+            try {
+                return JSON.parse(decodeURIComponent(window.atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join('')));
+            } catch (e) { return null; }
+        }
+
+        function handleCredentialResponse(response) {
+            const payload = parseJwt(response.credential);
+            if (payload) {
+                currentUser = { 
+                    id: payload.sub, 
+                    lastName: payload.family_name || payload.name || "Student" 
+                };
+                document.getElementById('google-btn-container').style.display = 'none';
+                const welcomeEl = document.getElementById('user-welcome');
+                welcomeEl.innerText = `👋 Hi, ${currentUser.lastName}!`;
+                welcomeEl.classList.remove('hidden');
+            }
+        }
+
+        window.onload = function () {
+            google.accounts.id.initialize({
+                client_id: "623171860819-1fldq3op0pmilgapk5o2j9c3f8oa7d39.apps.googleusercontent.com",
+                callback: handleCredentialResponse
+            });
+            google.accounts.id.renderButton(
+                document.getElementById("google-btn-container"),
+                { theme: "outline", size: "small", shape: "pill" }
+            );
+            initGame();
+        };
+    </script>
+
+    <!-- Firebase Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDUODAImoAOc-o9sgOrhOYz1kImZcg3cqI",
+            authDomain: "test-7f93c.firebaseapp.com",
+            projectId: "test-7f93c",
+            storageBucket: "test-7f93c.firebasestorage.app",
+            messagingSenderId: "623171860819",
+            appId: "1:623171860819:web:587304c09b0e8bfcebc9a6",
+            measurementId: "G-S68W1EQDYS"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        window.saveToFirebase = async (data) => {
+            const btn = document.getElementById('btn-save-score');
+            try {
+                btn.innerText = "Transmitting... 📡";
+                btn.disabled = true;
+                
+                const docId = `${data.googleId}_timed_${data.chapter}`;
+                const docRef = doc(db, "2627p5a1_spelling_monster", docId);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists() && data.score <= docSnap.data().score) {
+                    alert(`Your high score in this chapter is ${docSnap.data().score}. Keep trying to beat your record! 💪`);
+                    btn.innerText = "Submit Score 🚀";
+                    btn.disabled = false;
+                    return;
+                }
+
+                await setDoc(docRef, { ...data, timestamp: new Date() });
+                alert("New High Score saved to Hall of Fame! 🎉");
+                document.getElementById('game-over-modal').classList.add('hidden');
+                document.getElementById('hof-modal').classList.remove('hidden');
+                fetchLeaderboard();
+            } catch (e) {
+                console.error("Firebase Error:", e);
+                alert("Upload failed. Please check your network connection.");
+            } finally {
+                btn.innerText = "Submit Score 🚀";
+                btn.disabled = false;
+            }
+        };
+
+        window.fetchLeaderboard = async () => {
+            const tbody = document.getElementById('hof-table-body');
+            tbody.innerHTML = "<tr><td colspan='5' class='p-3 text-center text-xs'>Loading leaderboard... ⏳</td></tr>";
+            
+            const classFilter = document.getElementById('filter-class').value;
+            const chapterFilter = document.getElementById('filter-chapter') ? document.getElementById('filter-chapter').value : 'all';
+            
+            let conds = [];
+            if (chapterFilter) {
+                conds.push(where("chapter", "==", chapterFilter));
+            }
+            
+            if (classFilter !== "ALL") {
+                conds.push(where("class", "==", classFilter));
+            }
+
+            try {
+                const q = query(collection(db, "2627p5a1_spelling_monster"), ...conds, orderBy("score", "desc"), limit(25));
+                const snap = await getDocs(q);
+                tbody.innerHTML = snap.empty ? "<tr><td colspan='5' class='p-3 text-center text-gray-400 text-xs'>No scores logged yet!</td></tr>" : "";
+                
+                let rank = 1;
+                snap.forEach((docSnap) => {
+                    const d = docSnap.data();
+                    let rDisp = rank === 1 ? "🥇 1" : rank === 2 ? "🥈 2" : rank === 3 ? "🥉 3" : rank;
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-yellow-50">
+                            <td class="p-1.5 text-center font-black">${rDisp}</td>
+                            <td class="p-1.5">${d.class}</td>
+                            <td class="p-1.5 text-center">${d.studentNum}</td>
+                            <td class="p-1.5 font-bold text-blue-700">${d.lastName || d.name || 'Student'}</td>
+                            <td class="p-1.5 text-center font-black text-yellow-600">${d.score}</td>
+                        </tr>`;
+                    rank++;
+                });
+            } catch (e) {
+                console.error("Error fetching leaderboard:", e);
+                tbody.innerHTML = `<tr><td colspan='5' class='p-3 text-center text-red-500 text-xs'>Failed to load data. Firestore index may be missing. Check browser console (F12) for index link.</td></tr>`;
+            }
+        };
+    </script>
+
+    <!-- Game Logic & Vocabulary Dataset -->
+    <script>
+        const vocabularyBank = {
+            '1': [
+                "arrive", "early", "late", "dress", "tidily", "untidily", "wait", 
+                "patiently", "impatiently", "eat", "quietly", "noisily", "speak", 
+                "politely", "rudely", "jump", "queue", "offer", "seat", "push", 
+                "passengers", "rush", "seats", "talk", "phone", "softly", "loudly"
+            ],
+            '2': [
+                "mean", "nice", "say", "sorry", "share", "feelings", "secrets", 
+                "quarrel", "argue", "discuss", "agree", "disagree", "get", "help", 
+                "homework", "lie", "jealous", "take", "care", "shocked", "puzzled", 
+                "embarrassed", "annoyed", "upset", "disappointed"
+            ],
+            '3': [
+                "vest", "bow", "tie", "suit", "sandals", "gloves", "mittens", 
+                "glasses", "sunglasses", "curly", "blonde", "hair", "long", 
+                "straight", "round", "face"
+            ],
+            '4': [
+                "backpack", "hairbrush", "racket", "hair", "clip", "mirror", 
+                "goggles", "headphones", "gold", "necklace", "diamond", "ring", 
+                "crystal", "bracelet", "silver", "earrings", "woollen", "cardigan", 
+                "cotton", "top", "leather", "coin", "purse"
+            ]
+        };
+        vocabularyBank['all'] = [...vocabularyBank['1'], ...vocabularyBank['2'], ...vocabularyBank['3'], ...vocabularyBank['4']];
+
+        // Game State
+        let currentChapter = 'all';
+        let gameMode = 'timed';
+        let currentWord = '';
+        let targetIndex = 0;
+        let wordsCompleted = 0;
+        let timerInterval = null;
+        let timeLeft = 180;
+
+        // Drag State
+        let activeTile = null;
+        let startX = 0, startY = 0;
+
+        // DOM Elements
+        const monsterZone = document.getElementById('monster-zone');
+        const blanksContainer = document.getElementById('blanks-container');
+        const lettersContainer = document.getElementById('letters-container');
+        const audioBtn = document.getElementById('btn-audio');
+        const scoreDisplay = document.getElementById('score-display');
+        const timerDisplay = document.getElementById('timer-display');
+        const timerBox = document.getElementById('timer-box');
+        const chapterSelect = document.getElementById('chapter-select');
+        const modeBtn = document.getElementById('btn-mode');
+        const hofBtn = document.getElementById('btn-hof');
+
+        const gameOverModal = document.getElementById('game-over-modal');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const hofModal = document.getElementById('hof-modal');
+        const closeHofBtn = document.getElementById('btn-close-hof');
+
+        // Web Audio Synthesizer (Sound FX)
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+            
+            if (type === 'correct') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
+                gain.gain.setValueAtTime(0.5, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'wrong') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(150, now + 0.2);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now);
+                osc.stop(now + 0.2);
+            } else if (type === 'tada') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(400, now);
+                osc.frequency.setValueAtTime(600, now + 0.1);
+                osc.frequency.setValueAtTime(800, now + 0.2);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                osc.start(now);
+                osc.stop(now + 0.6);
+            }
+        }
+
+        function initGame() {
+            wordsCompleted = 0;
+            scoreDisplay.textContent = wordsCompleted;
+            setupTimer();
+            loadNextWord();
+            setupEventListeners();
+        }
+
+        function setupTimer() {
+            clearInterval(timerInterval);
+            if (gameMode === 'timed') {
+                timeLeft = 180;
+                timerBox.classList.remove('hidden');
+                updateTimerDisplay();
+                timerInterval = setInterval(() => {
+                    timeLeft--;
+                    updateTimerDisplay();
+                    if (timeLeft <= 0) {
+                        clearInterval(timerInterval);
+                        endGame();
+                    }
+                }, 1000);
+            } else {
+                timerBox.classList.add('hidden');
+            }
+        }
+
+        function updateTimerDisplay() {
+            const m = Math.floor(timeLeft / 60);
+            const s = timeLeft % 60;
+            timerDisplay.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function endGame() {
+            finalScoreDisplay.textContent = wordsCompleted;
+            if (currentUser) {
+                document.getElementById('upload-name-display').innerText = currentUser.lastName;
+                document.getElementById('upload-section').classList.remove('hidden');
+            } else {
+                document.getElementById('upload-section').classList.add('hidden');
+            }
+            gameOverModal.classList.remove('hidden');
+        }
+
+        function restartGame() {
+            gameOverModal.classList.add('hidden');
+            initGame();
+        }
+
+        function loadNextWord() {
+            const list = vocabularyBank[currentChapter];
+            currentWord = list[Math.floor(Math.random() * list.length)];
+            targetIndex = 0;
+            
+            blanksContainer.innerHTML = '';
+            for (let i = 0; i < currentWord.length; i++) {
+                const blank = document.createElement('div');
+                blank.className = 'blank-slot w-7 h-9 sm:w-9 sm:h-11 border-b-4 sm:border-b-6 border-blue-400 flex items-end justify-center pb-1 text-xl sm:text-2xl font-black text-transparent lowercase';
+                blank.textContent = currentWord[i];
+                blanksContainer.appendChild(blank);
+            }
+
+            lettersContainer.innerHTML = '';
+            const scrambled = currentWord.split('').sort(() => Math.random() - 0.5);
+            scrambled.forEach((letter) => {
+                const tile = document.createElement('div');
+                tile.className = 'letter-tile bg-yellow-300 border-3 sm:border-4 border-yellow-500 rounded-xl w-10 h-12 sm:w-11 sm:h-13 flex items-center justify-center text-xl sm:text-2xl font-black text-blue-900 lowercase shadow-md';
+                tile.textContent = letter;
+                tile.dataset.letter = letter;
+                tile.addEventListener('pointerdown', handleDragStart);
+                lettersContainer.appendChild(tile);
+            });
+
+            setTimeout(playAudio, 400);
+        }
+
+        function playAudio() {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(currentWord);
+                utterance.lang = 'en-GB';
+                utterance.rate = 0.85;
+
+                const voices = window.speechSynthesis.getVoices();
+                const ukVoice = voices.find(v => v.lang === 'en-GB' || v.lang === 'en_GB' || v.name.includes('UK'));
+                if (ukVoice) utterance.voice = ukVoice;
+
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function handleDragStart(e) {
+            activeTile = e.target;
+            startX = e.clientX;
+            startY = e.clientY;
+            
+            activeTile.style.transition = 'none';
+            activeTile.style.zIndex = '50';
+            activeTile.classList.add('shadow-2xl', 'scale-110');
+            
+            activeTile.setPointerCapture(e.pointerId);
+            activeTile.addEventListener('pointermove', handleDragMove);
+            activeTile.addEventListener('pointerup', handleDragEnd);
+            activeTile.addEventListener('pointercancel', handleDragEnd);
+        }
+
+        function handleDragMove(e) {
+            if (!activeTile) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            activeTile.style.transform = `translate(${dx}px, ${dy}px) scale(1.1)`;
+        }
+
+        function handleDragEnd(e) {
+            if (!activeTile) return;
+            activeTile.removeEventListener('pointermove', handleDragMove);
+            activeTile.removeEventListener('pointerup', handleDragEnd);
+            activeTile.removeEventListener('pointercancel', handleDragEnd);
+            activeTile.releasePointerCapture(e.pointerId);
+
+            checkDropTarget();
+            activeTile = null;
+        }
+
+        function checkDropTarget() {
+            const monsterRect = monsterZone.getBoundingClientRect();
+            const tileRect = activeTile.getBoundingClientRect();
+
+            const isIntersecting = !(
+                tileRect.right < monsterRect.left - 20 ||
+                tileRect.left > monsterRect.right + 20 ||
+                tileRect.bottom < monsterRect.top - 20 ||
+                tileRect.top > monsterRect.bottom + 20
+            );
+
+            if (isIntersecting) {
+                if (activeTile.dataset.letter === currentWord[targetIndex]) {
+                    handleCorrectLetter();
+                } else {
+                    handleIncorrectLetter();
+                }
+            } else {
+                resetTilePosition();
+            }
+        }
+
+        function handleCorrectLetter() {
+            playSound('correct');
+            monsterZone.classList.remove('animate-chomp');
+            void monsterZone.offsetWidth;
+            monsterZone.classList.add('animate-chomp');
+
+            blanksContainer.children[targetIndex].classList.add('filled');
+            activeTile.style.display = 'none';
+            targetIndex++;
+
+            if (targetIndex === currentWord.length) {
+                wordsCompleted++;
+                scoreDisplay.textContent = wordsCompleted;
+                if (window.syncP5HomeStats) window.syncP5HomeStats(wordsCompleted, 15);
+                playSound('tada');
+                setTimeout(loadNextWord, 1200);
+            }
+        }
+
+        function handleIncorrectLetter() {
+            playSound('wrong');
+            monsterZone.classList.add('animate-shake');
+            setTimeout(() => monsterZone.classList.remove('animate-shake'), 400);
+            resetTilePosition();
+        }
+
+        function resetTilePosition() {
+            activeTile.style.transition = 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            activeTile.style.transform = 'translate(0px, 0px) scale(1)';
+            activeTile.style.zIndex = 1;
+            activeTile.classList.remove('shadow-2xl', 'scale-110');
+        }
+
+        function submitScore() {
+            const stuClass = document.getElementById('class-select').value;
+            const stuNum = document.getElementById('student-num').value;
+            
+            if (!stuNum || stuNum < 1 || stuNum > 40) {
+                alert("Please enter a valid Class Number (1-40)!");
+                return;
+            }
+
+            if (window.saveToFirebase && currentUser) {
+                window.saveToFirebase({
+                    class: stuClass,
+                    studentNum: parseInt(stuNum),
+                    lastName: currentUser.lastName,
+                    googleId: currentUser.id,
+                    score: wordsCompleted,
+                    chapter: currentChapter
+                });
+            }
+        }
+
+        function setupEventListeners() {
+            audioBtn.onclick = playAudio;
+            monsterZone.onclick = playAudio;
+
+            chapterSelect.onchange = (e) => {
+                currentChapter = e.target.value;
+                if (document.getElementById('filter-chapter')) {
+                    document.getElementById('filter-chapter').value = currentChapter;
+                }
+                initGame();
+            };
+
+            modeBtn.onclick = () => {
+                if (gameMode === 'infinite') {
+                    if (!currentUser) {
+                        alert("🔒 You must sign in with Google to play Timed Mode!");
+                        return;
+                    }
+                    gameMode = 'timed';
+                    modeBtn.textContent = '⏱️ Mode: Timed (3m)';
+                } else {
+                    gameMode = 'infinite';
+                    modeBtn.textContent = '♾️ Mode: Infinite';
+                }
+                initGame();
+            };
+
+            hofBtn.onclick = () => {
+                if (document.getElementById('filter-chapter')) {
+                    document.getElementById('filter-chapter').value = currentChapter;
+                }
+                if (window.fetchLeaderboard) window.fetchLeaderboard();
+                hofModal.classList.remove('hidden');
+            };
+
+            closeHofBtn.onclick = () => hofModal.classList.add('hidden');
+            document.addEventListener('dragstart', (e) => e.preventDefault());
+        }
+    </script>
+</body>
+</html>
