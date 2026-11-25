@@ -1581,7 +1581,7 @@
         document.getElementById("final-stats").innerHTML = resultHTML;
       }
 
-      function submitScore() {
+        function submitScore() {
         const stuClass = document.getElementById("class-select").value;
         const stuNum = document.getElementById("student-num").value;
 
@@ -1609,9 +1609,8 @@
         };
 
         if (window.persistHubUser) window.persistHubUser({ id: currentUser.id, lastName: currentUser.lastName, class: stuClass, studentNum: parseInt(stuNum, 10) });
-          if (window.saveToFirebase) {
-          if (window.persistHubUser) window.persistHubUser({ id: currentUser.id, lastName: currentUser.lastName, class: cls, studentNum: sno });
-            window.saveToFirebase(data);
+        if (window.saveToFirebase) {
+          window.saveToFirebase(data);
         }
       }
     </script>

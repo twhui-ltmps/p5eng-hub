@@ -1012,7 +1012,7 @@
             });
         }
 
-        function handleChoice(btn, selected, correct) {
+            function handleChoice(btn, selected, correct) {
             document.querySelectorAll('.choice-btn').forEach(b => {
                 b.disabled = true;
                 if(b.innerText.toLowerCase() === correct.toLowerCase()) b.classList.add('feedback-correct');
@@ -1022,7 +1022,7 @@
             if (selected.toLowerCase() === correct.toLowerCase()) {
                 state.correct++;
                 if (state.mode === 'timed') state.score += 10;
-                if (window.awardCorrectExp) window.awardCorrectExp(mode === 'timed' ? stats.score : stats.correct * 10);
+                if (window.awardCorrectExp) window.awardCorrectExp(state.mode === 'timed' ? state.score : state.correct * 10);
                 
                 updateProgress();
                 setTimeout(nextQuestion, 1200);
