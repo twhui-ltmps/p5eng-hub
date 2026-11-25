@@ -470,19 +470,248 @@
     </style>
   </head>
   <body>
+
     <script>
-      window.syncP5HomeStats = function(newScore, earnedExp) {
+      (function () {
+        const GAME_ID = "p5_prepositions";
+        const EXP_PER_CORRECT = 5;
+        const COMPLETION_BONUS_EXP = 20;
+        const USER_STORAGE_KEY = "p5_current_user";
+        const SCHOOL_YEAR_KEY = "p5_exp_school_year";
+        const PROFILES_COLLECTION = "2627p5_user_profiles";
+
+        function getCurrentSchoolYearKey(dateObj = new Date()) {
+          const year = dateObj.getFullYear();
+          const month = dateObj.getMonth() + 1;
+          const startYear = month >= 9 ? year : year - 1;
+          const endYear = startYear + 1;
+          return `${String(startYear).slice(-2)}${String(endYear).slice(-2)}`;
+        }
+
+        function ensureSchoolYearLocal() {
+          const currentSY = getCurrentSchoolYearKey();
+          const savedSY = localStorage.getItem(SCHOOL_YEAR_KEY);
+          if (savedSY !== currentSY) {
+            ["p5_prepositions", "p5_adj_adv", "p5_tenses", "p5_irregular_verbs", "p5_5a1_4_spelling"].forEach((gid) => {
+              localStorage.setItem(`p5_exp_${gid}`, "0");
+            });
+            localStorage.setItem("p5_streak_count", "0");
+            localStorage.setItem("p5_streak_last_date", "");
+            localStorage.setItem(SCHOOL_YEAR_KEY, currentSY);
+          }
+          return currentSY;
+        }
+
+        function getSavedHubUser() {
+          try {
+            const raw = localStorage.getItem(USER_STORAGE_KEY);
+            if (!raw) return null;
+            const u = JSON.parse(raw);
+            if (!u || !u.id) return null;
+            return {
+              id: String(u.id),
+              lastName: u.lastName || "Student",
+              class: u.class || "5A",
+              studentNum: u.studentNum ? parseInt(u.studentNum, 10) : ""
+            };
+          } catch (_) {
+            return null;
+          }
+        }
+
+        window.persistHubUser = function (partialUser) {
+          try {
+            const existing = getSavedHubUser() || {};
+            const merged = {
+              id: String((partialUser && partialUser.id) || existing.id || ""),
+              lastName: (partialUser && partialUser.lastName) || existing.lastName || "Student",
+              class: (partialUser && partialUser.class) || existing.class || "5A",
+              studentNum:
+                partialUser && partialUser.studentNum
+                  ? parseInt(partialUser.studentNum, 10)
+                  : (existing.studentNum || "")
+            };
+            if (!merged.id) return null;
+            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(merged));
+            window.currentUser = merged;
+            return merged;
+          } catch (_) {
+            return null;
+          }
+        };
+
+        function applyInheritedUserUI() {
+          const u = getSavedHubUser();
+          if (!u) return;
+          window.currentUser = u;
+
+          const btnCont = document.getElementById("google-btn-container");
+          if (btnCont) btnCont.style.display = "none";
+          const hintEl = document.getElementById("login-hint");
+          if (hintEl) hintEl.style.display = "none";
+
+          const welcomeEl = document.getElementById("user-welcome");
+          if (welcomeEl) {
+            const tag = u.class ? ` (${u.class}${u.studentNum ? " #" + u.studentNum : ""})` : "";
+            welcomeEl.innerText = `✅ Signed in: ${u.lastName}${tag}`;
+            welcomeEl.style.display = "block";
+            welcomeEl.classList.remove("hidden");
+          }
+
+          const clsSelect = document.getElementById("class-select");
+          if (clsSelect && u.class) clsSelect.value = u.class;
+          const numInput = document.getElementById("student-num");
+          if (numInput && u.studentNum) numInput.value = u.studentNum;
+        }
+
+        window.syncP5HomeStats = function (newScore, earnedExp) {
+          try {
+            const sy = ensureSchoolYearLocal();
+            const s = Math.max(0, Math.round(Number(newScore) || 0));
+            const e = Math.max(0, Math.round(Number(earnedExp) || 0));
+
+            const prevBest = parseInt(localStorage.getItem(`p5_highscore_${GAME_ID}`) || "0", 10) || 0;
+            const bestNow = Math.max(prevBest, s);
+            localStorage.setItem(`p5_highscore_${GAME_ID}`, String(bestNow));
+
+            const prevExp = parseInt(localStorage.getItem(`p5_exp_${GAME_ID}`) || "0", 10) || 0;
+            const expNow = prevExp + e;
+            localStorage.setItem(`p5_exp_${GAME_ID}`, String(expNow));
+
+            if (typeof window.pushGameStatsToCloudProfile === "function") {
+              window.pushGameStatsToCloudProfile(GAME_ID, bestNow, expNow, sy);
+            }
+          } catch (err) {
+            console.warn("Home sync error:", err);
+          }
+        };
+
+        window.awardCorrectExp = function (scoreForBest) {
+          window.syncP5HomeStats(scoreForBest, EXP_PER_CORRECT);
+        };
+
+        window.awardRoundCompletionExp = function (scoreForBest) {
+          window.syncP5HomeStats(scoreForBest, COMPLETION_BONUS_EXP);
+        };
+
+        // Hook into existing handleCredentialResponse if present so sign-in automatically saves class/num/user
+        const origHandleCred = window.handleCredentialResponse;
+        window.handleCredentialResponse = function (response) {
+          if (typeof origHandleCred === "function") {
+            origHandleCred(response);
+          }
+          if (window.currentUser && window.currentUser.id) {
+            const saved = window.persistHubUser(window.currentUser);
+            if (saved && typeof window.pullCloudProfileToGame === "function") {
+              window.pullCloudProfileToGame(saved);
+            }
+          }
+        };
+
+        document.addEventListener("DOMContentLoaded", function () {
+          ensureSchoolYearLocal();
+          applyInheritedUserUI();
+          const u = getSavedHubUser();
+          if (u && typeof window.pullCloudProfileToGame === "function") {
+            window.pullCloudProfileToGame(u);
+          }
+        });
+
+        window.addEventListener("load", function () {
+          ensureSchoolYearLocal();
+          applyInheritedUserUI();
+        });
+      })();
+    </script>
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
+      import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyDUODAImoAOc-o9sgOrhOYz1kImZcg3cqI",
+        authDomain: "test-7f93c.firebaseapp.com",
+        projectId: "test-7f93c",
+        storageBucket: "test-7f93c.firebasestorage.app",
+        messagingSenderId: "623171860819",
+        appId: "1:623171860819:web:587304c09b0e8bfcebc9a6",
+        measurementId: "G-S68W1EQDYS"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const PROFILES_COLLECTION = "2627p5_user_profiles";
+
+      function getSchoolYearKey() {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = d.getMonth() + 1;
+        const start = m >= 9 ? y : y - 1;
+        return `${String(start).slice(-2)}${String(start + 1).slice(-2)}`;
+      }
+
+      window.pullCloudProfileToGame = async function (userObj) {
+        const u = userObj || window.currentUser;
+        if (!u || !u.id) return;
+        const sy = getSchoolYearKey();
         try {
-          const gid = "p5_prepositions";
-          const s = Math.max(0, Math.round(Number(newScore) || 0));
-          const e = Math.max(0, Math.round(Number(earnedExp) || 0));
-          const prevBest = parseInt(localStorage.getItem("p5_highscore_" + gid) || "0", 10);
-          if (s > prevBest) localStorage.setItem("p5_highscore_" + gid, s);
-          const prevExp = parseInt(localStorage.getItem("p5_exp_" + gid) || "0", 10);
-          localStorage.setItem("p5_exp_" + gid, prevExp + e);
-        } catch (err) { console.warn("Home sync error:", err); }
+          const ref = doc(db, PROFILES_COLLECTION, String(u.id));
+          const snap = await getDoc(ref);
+          if (!snap.exists()) return;
+          const cloud = snap.data() || {};
+          const merged = window.persistHubUser({
+            id: String(u.id),
+            lastName: cloud.lastName || u.lastName || "Student",
+            class: u.class || cloud.class || "5A",
+            studentNum: u.studentNum || cloud.studentNum || ""
+          });
+          const games = cloud.games || {};
+          ["p5_prepositions", "p5_adj_adv", "p5_tenses", "p5_irregular_verbs", "p5_5a1_4_spelling"].forEach((gid) => {
+            const localHS = parseInt(localStorage.getItem(`p5_highscore_${gid}`) || "0", 10) || 0;
+            const cloudHS = parseInt((games[gid] && games[gid].highScore) || 0, 10) || 0;
+            localStorage.setItem(`p5_highscore_${gid}`, String(Math.max(localHS, cloudHS)));
+
+            const localExp = parseInt(localStorage.getItem(`p5_exp_${gid}`) || "0", 10) || 0;
+            const cloudExp = cloud.expSchoolYear === sy ? (parseInt((games[gid] && games[gid].exp) || 0, 10) || 0) : 0;
+            localStorage.setItem(`p5_exp_${gid}`, String(Math.max(localExp, cloudExp)));
+          });
+          if (merged) {
+            const clsSelect = document.getElementById("class-select");
+            if (clsSelect && merged.class) clsSelect.value = merged.class;
+            const numInput = document.getElementById("student-num");
+            if (numInput && merged.studentNum) numInput.value = merged.studentNum;
+          }
+        } catch (e) {
+          console.warn("Pull profile failed:", e);
+        }
+      };
+
+      window.pushGameStatsToCloudProfile = async function (gameId, bestScore, gameExp, schoolYear) {
+        const u = window.currentUser;
+        if (!u || !u.id) return;
+        const sy = schoolYear || getSchoolYearKey();
+        try {
+          const ref = doc(db, PROFILES_COLLECTION, String(u.id));
+          const payload = {
+            googleId: String(u.id),
+            lastName: u.lastName || "Student",
+            class: u.class || "5A",
+            studentNum: u.studentNum ? parseInt(u.studentNum, 10) : null,
+            expSchoolYear: sy,
+            games: {
+              [gameId]: {
+                highScore: Math.max(0, Number(bestScore) || 0),
+                exp: Math.max(0, Number(gameExp) || 0)
+              }
+            },
+            updatedAt: new Date().toISOString()
+          };
+          await setDoc(ref, payload, { merge: true });
+        } catch (e) {
+          console.warn("Push profile failed:", e);
+        }
       };
     </script>
+
 
     <!-- Custom Modal for Wrong Answers -->
     <div id="custom-modal" class="modal-overlay">
@@ -558,10 +787,9 @@
         <div class="form-group">
           <label>Select Level :</label>
           <select id="question-type">
-            <option value="easy">🌱 Level 1: Easy Mode (Basic)</option>
+            <option value="easy" selected>🌱 Level 1: Easy Mode (Basic)</option>
             <option value="hard">🔥 Level 2: Hard Mode (Advanced)</option>
-            <option value="challenge" selected>
-              🏆 Level 3: Challenge Mode (Sentence Fill-in-the-blanks)
+            <option value="challenge">🏆 Level 3: Challenge Mode (Sentence Fill-in-the-blanks)
             </option>
           </select>
         </div>
@@ -1277,7 +1505,7 @@
           if (mode === "timed") {
             stats.score += typeConfigs[typeLevel].pts;
           }
-          if (window.syncP5HomeStats) window.syncP5HomeStats(mode === "timed" ? stats.score : stats.correct * 10, typeConfigs[typeLevel].pts);
+          if (window.awardCorrectExp) window.awardCorrectExp(mode === 'timed' ? stats.score : stats.correct * 10);
 
           triggerFeedback("correct");
           updateStatsUI();
@@ -1323,6 +1551,7 @@
       }
 
       function endGame() {
+            if (window.awardRoundCompletionExp) window.awardRoundCompletionExp(mode === 'timed' ? stats.score : stats.correct * 10);
         showScreen("result-screen");
         const acc =
           stats.total === 0
@@ -1379,8 +1608,10 @@
           questionType: typeLevel,
         };
 
-        if (window.saveToFirebase) {
-          window.saveToFirebase(data);
+        if (window.persistHubUser) window.persistHubUser({ id: currentUser.id, lastName: currentUser.lastName, class: stuClass, studentNum: parseInt(stuNum, 10) });
+          if (window.saveToFirebase) {
+          if (window.persistHubUser) window.persistHubUser({ id: currentUser.id, lastName: currentUser.lastName, class: cls, studentNum: sno });
+            window.saveToFirebase(data);
         }
       }
     </script>

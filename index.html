@@ -121,8 +121,201 @@
             }
         }
     </style>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="relative flex flex-col min-h-screen justify-between text-gray-800">
+
+<script>
+(function () {
+  const EXP_PER_LEVEL = 500;
+  const MAX_LEVEL = 100;
+  const RANKS_PER_TIER = 10;
+  const EXP_PER_CORRECT = 5;
+  const COMPLETION_BONUS_EXP = 20;
+  const USER_STORAGE_KEY = "p5_current_user";
+  const SCHOOL_YEAR_KEY = "p5_exp_school_year";
+  const PROFILES_COLLECTION = "2627p5_user_profiles";
+
+  const RANK_TITLES = [
+    "🌱 Woolly Sprout",
+    "🐑 Curious Lamb",
+    "✏️ Word Explorer",
+    "📖 Sentence Builder",
+    "⚡ Grammar Ranger",
+    "🔥 Tense Sprinter",
+    "🌟 Spelling Ace",
+    "🏅 Honor Scholar",
+    "👑 Grand Linguist",
+    "🏆 Legendary Professor"
+  ];
+
+  const GAME_IDS = [
+    "p5_prepositions",
+    "p5_adj_adv",
+    "p5_tenses",
+    "p5_irregular_verbs",
+    "p5_5a1_4_spelling"
+  ];
+
+  function getCurrentSchoolYearKey(dateObj = new Date()) {
+    const year = dateObj.getFullYear();
+    const month = dateObj.getMonth() + 1; // 1-12; Sept is 9
+    const startYear = month >= 9 ? year : year - 1;
+    const endYear = startYear + 1;
+    return `${String(startYear).slice(-2)}${String(endYear).slice(-2)}`;
+  }
+
+  function getTodayKey(dateObj = new Date()) {
+    return `${dateObj.getFullYear()}-${dateObj.getMonth() + 1}-${dateObj.getDate()}`;
+  }
+
+  function getYesterdayKey(dateObj = new Date()) {
+    const d = new Date(dateObj);
+    d.setDate(d.getDate() - 1);
+    return getTodayKey(d);
+  }
+
+  function ensureCurrentSchoolYearLocal() {
+    const currentSY = getCurrentSchoolYearKey();
+    const savedSY = localStorage.getItem(SCHOOL_YEAR_KEY);
+    if (savedSY !== currentSY) {
+      GAME_IDS.forEach((gid) => {
+        localStorage.setItem(`p5_exp_${gid}`, "0");
+      });
+      localStorage.setItem("p5_streak_count", "0");
+      localStorage.setItem("p5_streak_last_date", "");
+      localStorage.setItem(SCHOOL_YEAR_KEY, currentSY);
+    }
+    return currentSY;
+  }
+
+  function getProgressionInfo(totalExp) {
+    const safeExp = Math.max(0, Math.floor(Number(totalExp) || 0));
+    const maxCapExp = EXP_PER_LEVEL * MAX_LEVEL; // 50,000 EXP
+    const level = Math.min(MAX_LEVEL, 1 + Math.floor(safeExp / EXP_PER_LEVEL));
+    const rankIndex = Math.min(RANK_TITLES.length - 1, Math.floor((level - 1) / RANKS_PER_TIER));
+    const rankTitle = RANK_TITLES[rankIndex];
+
+    const currentLevelStartExp = (level - 1) * EXP_PER_LEVEL;
+    const nextLevelExp = level < MAX_LEVEL ? level * EXP_PER_LEVEL : maxCapExp;
+    const expToNextLevel = level < MAX_LEVEL ? Math.max(0, nextLevelExp - safeExp) : 0;
+    const levelProgressPct =
+      level < MAX_LEVEL
+        ? Math.min(100, Math.max(0, Math.round(((safeExp - currentLevelStartExp) / EXP_PER_LEVEL) * 100)))
+        : 100;
+
+    const nextRankIndex = rankIndex + 1;
+    const hasNextRank = nextRankIndex < RANK_TITLES.length;
+    const nextRankTitle = hasNextRank ? RANK_TITLES[nextRankIndex] : null;
+    const nextRankStartLevel = hasNextRank ? nextRankIndex * RANKS_PER_TIER + 1 : MAX_LEVEL;
+    const nextRankThresholdExp = hasNextRank ? (nextRankStartLevel - 1) * EXP_PER_LEVEL : maxCapExp;
+    const expToNextRank = hasNextRank ? Math.max(0, nextRankThresholdExp - safeExp) : 0;
+
+    return {
+      totalExp: safeExp,
+      level,
+      maxLevel: MAX_LEVEL,
+      rankIndex,
+      rankTitle,
+      expToNextLevel,
+      levelProgressPct,
+      hasNextRank,
+      nextRankTitle,
+      nextRankStartLevel,
+      expToNextRank
+    };
+  }
+
+  function getSavedUser() {
+    try {
+      const raw = localStorage.getItem(USER_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !parsed.id) return null;
+      return {
+        id: String(parsed.id),
+        lastName: parsed.lastName || "Student",
+        class: parsed.class || "5A",
+        studentNum: parsed.studentNum ? parseInt(parsed.studentNum, 10) : ""
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveUserProfileLocal(userObj) {
+    if (!userObj || !userObj.id) return;
+    const cleaned = {
+      id: String(userObj.id),
+      lastName: userObj.lastName || "Student",
+      class: userObj.class || "5A",
+      studentNum: userObj.studentNum ? parseInt(userObj.studentNum, 10) : ""
+    };
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(cleaned));
+    window.currentUser = cleaned;
+    if (typeof window.onP5UserUpdated === "function") {
+      window.onP5UserUpdated(cleaned);
+    }
+  }
+
+  function buildCloudProfilePayload(userObj) {
+    const sy = ensureCurrentSchoolYearLocal();
+    const games = {};
+    let totalExp = 0;
+    GAME_IDS.forEach((gid) => {
+      const hs = Math.max(0, parseInt(localStorage.getItem(`p5_highscore_${gid}`) || "0", 10) || 0);
+      const exp = Math.max(0, parseInt(localStorage.getItem(`p5_exp_${gid}`) || "0", 10) || 0);
+      games[gid] = { highScore: hs, exp: exp };
+      totalExp += exp;
+    });
+    const streakCount = Math.max(0, parseInt(localStorage.getItem("p5_streak_count") || "0", 10) || 0);
+    const streakLastDate = localStorage.getItem("p5_streak_last_date") || "";
+    const prog = getProgressionInfo(totalExp);
+
+    return {
+      googleId: String(userObj.id),
+      lastName: userObj.lastName || "Student",
+      class: userObj.class || "5A",
+      studentNum: userObj.studentNum ? parseInt(userObj.studentNum, 10) : null,
+      expSchoolYear: sy,
+      totalExp,
+      level: prog.level,
+      rankTitle: prog.rankTitle,
+      streakCount,
+      streakLastDate,
+      games,
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  window.P5HubCore = {
+    EXP_PER_LEVEL,
+    MAX_LEVEL,
+    RANKS_PER_TIER,
+    EXP_PER_CORRECT,
+    COMPLETION_BONUS_EXP,
+    RANK_TITLES,
+    GAME_IDS,
+    PROFILES_COLLECTION,
+    getCurrentSchoolYearKey,
+    getTodayKey,
+    getYesterdayKey,
+    ensureCurrentSchoolYearLocal,
+    getProgressionInfo,
+    getSavedUser,
+    saveUserProfileLocal,
+    buildCloudProfilePayload
+  };
+
+  // Initialize saved user right away so games inherit hub sign-in seamlessly
+  ensureCurrentSchoolYearLocal();
+  const initialUser = getSavedUser();
+  if (initialUser) {
+    window.currentUser = initialUser;
+  }
+})();
+</script>
+
 
     <!-- ==================== 1. TOP NAVIGATION HEADER ==================== -->
     <header class="sticky top-0 z-30 w-full px-4 md:px-8 py-3 bg-white/95 backdrop-blur-md shadow-md border-b-2 border-purple-100">
@@ -154,8 +347,18 @@
                 </div>
             </div>
 
-            <!-- Right: Term Dropdown Selector + Duolingo-style Flame Streak Sign-in -->
-            <div class="flex items-center gap-2.5 sm:gap-3 ml-auto sm:ml-0">
+            <!-- Right: Unified Student Login + Term Dropdown Selector + Duolingo-style Flame Streak Sign-in -->
+            <div class="flex flex-wrap items-center gap-2 sm:gap-2.5 ml-auto sm:ml-0">
+                <!-- Unified Account Pill / Button -->
+                <div id="hubAuthBadge" class="flex items-center gap-1.5 bg-purple-50 border-2 border-purple-200 px-2.5 py-1.5 rounded-2xl">
+                    <div id="hubGoogleBtn" class="flex items-center justify-center min-h-[32px]"></div>
+                    <div id="hubSignedInInfo" class="hidden items-center gap-1.5 text-xs font-black text-purple-900">
+                        <span id="hubUserLabel" class="truncate max-w-[140px]">👤 5A #1 Chan</span>
+                        <button type="button" onclick="openProfileModal()" class="bg-purple-200 hover:bg-purple-300 text-purple-900 text-[10px] font-black px-2 py-0.5 rounded-lg transition">
+                            Edit
+                        </button>
+                    </div>
+                </div>
                 
                 <!-- Term Dropdown Selector -->
                 <div class="relative">
@@ -249,10 +452,25 @@
                 </div>
             </div>
 
-            <!-- Overall Progress Summary Pill -->
-            <div class="w-full md:w-auto flex md:flex-col justify-between items-center md:items-end bg-purple-50 px-4 py-3 rounded-2xl border-2 border-purple-200 flex-shrink-0">
-                <div class="text-xs font-extrabold text-purple-800 uppercase tracking-wider">Total P5 EXP</div>
-                <div id="totalExpDisplay" class="text-xl md:text-2xl font-black text-purple-600">⚡ 0 EXP</div>
+            <!-- Overall Level, Rank & EXP Progression Card -->
+            <div id="progressionCard" class="w-full md:w-80 bg-gradient-to-br from-purple-50 to-indigo-50 px-4 py-3 rounded-2xl border-2 border-purple-200 flex-shrink-0">
+                <div class="flex items-center justify-between gap-2 mb-1">
+                    <span id="rankTitleDisplay" class="text-xs md:text-sm font-black text-indigo-700">🌱 Woolly Sprout</span>
+                    <span id="levelBadgeDisplay" class="bg-purple-600 text-white text-xs font-black px-2.5 py-0.5 rounded-full">Lv. 1 / 100</span>
+                </div>
+                <div class="flex items-baseline justify-between gap-2 mb-1.5">
+                    <span class="text-[11px] font-extrabold text-purple-800 uppercase tracking-wider">Total P5 EXP</span>
+                    <span id="totalExpDisplay" class="text-lg md:text-xl font-black text-purple-700">⚡ 0 EXP</span>
+                </div>
+                <div class="w-full h-2.5 bg-white rounded-full overflow-hidden border border-purple-200 mb-1.5">
+                    <div id="levelProgressBar" class="h-full bg-gradient-to-r from-purple-500 via-fuchsia-500 to-amber-400 transition-all duration-300" style="width: 0%;"></div>
+                </div>
+                <div id="nextLevelHint" class="text-[11px] font-extrabold text-gray-700 leading-snug">
+                    500 EXP until Lv. 2
+                </div>
+                <div id="nextRankHint" class="text-[11px] font-bold text-indigo-600 leading-snug mt-0.5">
+                    4,500 EXP until next rank: 🐑 Curious Lamb (Lv. 11)
+                </div>
             </div>
         </section>
 
@@ -328,6 +546,45 @@
         </div>
 
     </main>
+
+    
+    <!-- ==================== CLASS & STUDENT NUMBER SETUP MODAL ==================== -->
+    <div id="profileModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 max-w-sm w-full border-4 border-purple-400 shadow-2xl">
+            <h3 class="text-xl font-black text-purple-800 mb-1">🎓 Student Profile Setup</h3>
+            <p id="profileModalSubtitle" class="text-xs font-bold text-gray-600 mb-4">
+                Confirm your Class & Class Number so your scores and EXP sync across devices!
+            </p>
+            <div class="mb-3">
+                <label class="block text-xs font-black text-gray-700 mb-1">Google Name</label>
+                <input id="profileNameInput" type="text" readonly class="w-full px-3 py-2 rounded-xl border-2 border-gray-200 bg-gray-100 text-sm font-bold text-gray-700">
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                    <label for="profileClassSelect" class="block text-xs font-black text-gray-700 mb-1">Class (5A–5E)</label>
+                    <select id="profileClassSelect" class="w-full px-3 py-2 rounded-xl border-2 border-purple-300 text-sm font-black text-gray-800 bg-white">
+                        <option value="5A">5A</option>
+                        <option value="5B">5B</option>
+                        <option value="5C">5C</option>
+                        <option value="5D">5D</option>
+                        <option value="5E">5E</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="profileNumInput" class="block text-xs font-black text-gray-700 mb-1">Class No. (1–40)</label>
+                    <input id="profileNumInput" type="number" min="1" max="40" placeholder="1–40" class="w-full px-3 py-2 rounded-xl border-2 border-purple-300 text-sm font-black text-gray-800 bg-white">
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button type="button" onclick="closeProfileModal()" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-black text-xs py-2.5 rounded-xl border-2 border-gray-300">
+                    Cancel
+                </button>
+                <button type="button" onclick="saveProfileFromModal()" class="flex-1 btn-bounce bg-purple-600 hover:bg-purple-700 text-white font-black text-xs py-2.5 rounded-xl border-2 border-purple-300">
+                    Save & Sync ☁️
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- ==================== FOOTER ==================== -->
     <footer class="relative z-10 w-full py-4 bg-white/75 backdrop-blur-sm text-center text-xs md:text-sm font-bold text-gray-700 border-t border-white/80 mt-8">
@@ -483,6 +740,7 @@
 
         // Read High Score & EXP from localStorage keys: `p5_highscore_<id>` and `p5_exp_<id>`
         function getGameStats(game) {
+            window.P5HubCore.ensureCurrentSchoolYearLocal();
             const savedScore = localStorage.getItem(`p5_highscore_${game.id}`);
             const savedExp = localStorage.getItem(`p5_exp_${game.id}`);
             return {
@@ -496,8 +754,127 @@
             GAMES.filter(g => g.enabled).forEach(game => {
                 totalExp += getGameStats(game).exp;
             });
-            document.getElementById("totalExpDisplay").innerText = `⚡ ${totalExp.toLocaleString()} EXP`;
+
+            const prog = window.P5HubCore.getProgressionInfo(totalExp);
+            document.getElementById("totalExpDisplay").innerText = `⚡ ${prog.totalExp.toLocaleString()} EXP`;
+            document.getElementById("levelBadgeDisplay").innerText = `Lv. ${prog.level} / ${prog.maxLevel}`;
+            document.getElementById("rankTitleDisplay").innerText = prog.rankTitle;
+            document.getElementById("levelProgressBar").style.width = `${prog.levelProgressPct}%`;
+
+            const nextLvEl = document.getElementById("nextLevelHint");
+            const nextRankEl = document.getElementById("nextRankHint");
+
+            if (prog.level >= prog.maxLevel) {
+                nextLvEl.innerText = "🎉 Max Level 100 Reached!";
+            } else {
+                nextLvEl.innerText = `${prog.expToNextLevel.toLocaleString()} EXP until Lv. ${prog.level + 1}`;
+            }
+
+            if (prog.hasNextRank) {
+                nextRankEl.innerText = `${prog.expToNextRank.toLocaleString()} EXP until next rank: ${prog.nextRankTitle} (Lv. ${prog.nextRankStartLevel})`;
+            } else {
+                nextRankEl.innerText = "👑 Highest Rank Unlocked!";
+            }
         }
+
+        let pendingGoogleUser = null;
+
+        function refreshHubUserBadge() {
+            const user = window.P5HubCore.getSavedUser();
+            const btnWrap = document.getElementById("hubGoogleBtn");
+            const infoWrap = document.getElementById("hubSignedInInfo");
+            const labelEl = document.getElementById("hubUserLabel");
+            if (user && user.id) {
+                btnWrap.classList.add("hidden");
+                infoWrap.classList.remove("hidden");
+                infoWrap.classList.add("flex");
+                const clsText = user.class ? user.class : "No Class";
+                const numText = user.studentNum ? `#${user.studentNum}` : "#?";
+                labelEl.innerText = `👤 ${clsText} ${numText} ${user.lastName}`;
+            } else {
+                btnWrap.classList.remove("hidden");
+                infoWrap.classList.add("hidden");
+                infoWrap.classList.remove("flex");
+            }
+        }
+
+        function openProfileModal(prefillUser = null) {
+            const u = prefillUser || window.P5HubCore.getSavedUser() || pendingGoogleUser;
+            if (!u || !u.id) return;
+            document.getElementById("profileNameInput").value = u.lastName || "Student";
+            document.getElementById("profileClassSelect").value = u.class || "5A";
+            document.getElementById("profileNumInput").value = u.studentNum || "";
+            document.getElementById("profileModal").classList.remove("hidden");
+        }
+
+        function closeProfileModal() {
+            document.getElementById("profileModal").classList.add("hidden");
+            pendingGoogleUser = null;
+        }
+
+        function saveProfileFromModal() {
+            const base = pendingGoogleUser || window.P5HubCore.getSavedUser();
+            if (!base || !base.id) return;
+            const cls = document.getElementById("profileClassSelect").value || "5A";
+            const numVal = parseInt(document.getElementById("profileNumInput").value, 10);
+            if (!numVal || numVal < 1 || numVal > 40) {
+                document.getElementById("mascotText").innerText =
+                    `"Please enter a valid Class Number from 1 to 40 so I can save your profile!"`;
+                return;
+            }
+            const updatedUser = {
+                id: String(base.id),
+                lastName: base.lastName || "Student",
+                class: cls,
+                studentNum: numVal
+            };
+            window.P5HubCore.saveUserProfileLocal(updatedUser);
+            pendingGoogleUser = null;
+            document.getElementById("profileModal").classList.add("hidden");
+            refreshHubUserBadge();
+            if (typeof window.syncCloudProfileNow === "function") {
+                window.syncCloudProfileNow(updatedUser);
+            }
+        }
+
+        function parseJwtToken(token) {
+            try {
+                const base64Url = token.split(".")[1];
+                const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+                const jsonPayload = decodeURIComponent(
+                    window.atob(base64).split("").map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join("")
+                );
+                return JSON.parse(jsonPayload);
+            } catch (_) {
+                return null;
+            }
+        }
+
+        window.onP5GoogleCredential = async function (response) {
+            const payload = parseJwtToken(response.credential);
+            if (!payload || !payload.sub) return;
+            const existing = window.P5HubCore.getSavedUser();
+            const candidate = {
+                id: String(payload.sub),
+                lastName: payload.family_name || payload.name || (existing && existing.lastName) || "Student",
+                class: (existing && existing.id === String(payload.sub) && existing.class) || "5A",
+                studentNum: (existing && existing.id === String(payload.sub) && existing.studentNum) || ""
+            };
+            window.P5HubCore.saveUserProfileLocal(candidate);
+            refreshHubUserBadge();
+
+            if (typeof window.syncCloudProfileNow === "function") {
+                const cloudProfile = await window.syncCloudProfileNow(candidate);
+                const latest = window.P5HubCore.getSavedUser() || candidate;
+                if (!latest.studentNum && (!cloudProfile || !cloudProfile.studentNum)) {
+                    pendingGoogleUser = latest;
+                    openProfileModal(latest);
+                }
+            } else if (!candidate.studentNum) {
+                pendingGoogleUser = candidate;
+                openProfileModal(candidate);
+            }
+        };
 
         /* =====================================================================
            FILTERING & RENDERING GAME CARDS
@@ -735,6 +1112,10 @@
 
             document.getElementById("mascotText").innerText =
                 `"Woohoo! You're on a 🔥 ${streakCount}-day revision streak! Keep practicing every day!"`;
+            const activeUser = window.P5HubCore.getSavedUser();
+            if (activeUser && typeof window.syncCloudProfileNow === "function") {
+                window.syncCloudProfileNow(activeUser);
+            }
         }
 
         /* =====================================================================
@@ -776,17 +1157,144 @@
         /* =====================================================================
            INITIALIZE HOME ON PAGE LOAD & TAB RETURN
         ===================================================================== */
+        function initHubGoogleSignIn() {
+            if (!window.google || !google.accounts || !google.accounts.id) return;
+            google.accounts.id.initialize({
+                client_id: "623171860819-1fldq3op0pmilgapk5o2j9c3f8oa7d39.apps.googleusercontent.com",
+                callback: window.onP5GoogleCredential
+            });
+            const btnEl = document.getElementById("hubGoogleBtn");
+            if (btnEl && !btnEl.dataset.rendered) {
+                btnEl.dataset.rendered = "1";
+                google.accounts.id.renderButton(btnEl, {
+                    theme: "outline",
+                    size: "medium",
+                    shape: "pill"
+                });
+            }
+        }
+
         window.onload = function () {
+            window.P5HubCore.ensureCurrentSchoolYearLocal();
             loadStreakUI();
+            refreshHubUserBadge();
             renderGames();
             updateTotalExpHeader();
+            initHubGoogleSignIn();
+            const savedUser = window.P5HubCore.getSavedUser();
+            if (savedUser && typeof window.syncCloudProfileNow === "function") {
+                window.syncCloudProfileNow(savedUser);
+            }
         };
 
         // Refresh scores automatically if returning via browser back button
         window.addEventListener("pageshow", function () {
+            window.P5HubCore.ensureCurrentSchoolYearLocal();
+            loadStreakUI();
+            refreshHubUserBadge();
             renderGames();
             updateTotalExpHeader();
+            const savedUser = window.P5HubCore.getSavedUser();
+            if (savedUser && typeof window.syncCloudProfileNow === "function") {
+                window.syncCloudProfileNow(savedUser);
+            }
         });
+    </script>
+
+    <!-- Firebase Cross-Device Profile Sync (2627p5_user_profiles) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDUODAImoAOc-o9sgOrhOYz1kImZcg3cqI",
+            authDomain: "test-7f93c.firebaseapp.com",
+            projectId: "test-7f93c",
+            storageBucket: "test-7f93c.firebasestorage.app",
+            messagingSenderId: "623171860819",
+            appId: "1:623171860819:web:587304c09b0e8bfcebc9a6",
+            measurementId: "G-S68W1EQDYS"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        window.syncCloudProfileNow = async function (userObj) {
+            const activeUser = userObj || window.P5HubCore.getSavedUser();
+            if (!activeUser || !activeUser.id) return null;
+
+            const currentSY = window.P5HubCore.ensureCurrentSchoolYearLocal();
+            const docRef = doc(db, window.P5HubCore.PROFILES_COLLECTION, String(activeUser.id));
+
+            try {
+                const snap = await getDoc(docRef);
+                let mergedUser = {
+                    id: String(activeUser.id),
+                    lastName: activeUser.lastName || "Student",
+                    class: activeUser.class || "5A",
+                    studentNum: activeUser.studentNum ? parseInt(activeUser.studentNum, 10) : ""
+                };
+
+                if (snap.exists()) {
+                    const cloud = snap.data() || {};
+                    if (!mergedUser.studentNum && cloud.studentNum) {
+                        mergedUser.studentNum = parseInt(cloud.studentNum, 10);
+                    }
+                    if (!activeUser.class && cloud.class) {
+                        mergedUser.class = cloud.class;
+                    }
+                    if (cloud.lastName && (!activeUser.lastName || activeUser.lastName === "Student")) {
+                        mergedUser.lastName = cloud.lastName;
+                    }
+
+                    const cloudGames = cloud.games || {};
+                    window.P5HubCore.GAME_IDS.forEach((gid) => {
+                        const localBest = Math.max(0, parseInt(localStorage.getItem(`p5_highscore_${gid}`) || "0", 10) || 0);
+                        const cloudBest = Math.max(0, parseInt((cloudGames[gid] && cloudGames[gid].highScore) || 0, 10) || 0);
+                        const bestScore = Math.max(localBest, cloudBest);
+                        localStorage.setItem(`p5_highscore_${gid}`, String(bestScore));
+
+                        const localExp = Math.max(0, parseInt(localStorage.getItem(`p5_exp_${gid}`) || "0", 10) || 0);
+                        const cloudExpSameYear =
+                            cloud.expSchoolYear === currentSY
+                                ? Math.max(0, parseInt((cloudGames[gid] && cloudGames[gid].exp) || 0, 10) || 0)
+                                : 0;
+                        const mergedExp = Math.max(localExp, cloudExpSameYear);
+                        localStorage.setItem(`p5_exp_${gid}`, String(mergedExp));
+                    });
+
+                    if (cloud.expSchoolYear === currentSY) {
+                        const localStreak = Math.max(0, parseInt(localStorage.getItem("p5_streak_count") || "0", 10) || 0);
+                        const cloudStreak = Math.max(0, parseInt(cloud.streakCount || 0, 10) || 0);
+                        const bestStreak = Math.max(localStreak, cloudStreak);
+                        localStorage.setItem("p5_streak_count", String(bestStreak));
+                        const localDate = localStorage.getItem("p5_streak_last_date") || "";
+                        if (!localDate && cloud.streakLastDate) {
+                            localStorage.setItem("p5_streak_last_date", cloud.streakLastDate);
+                        }
+                    }
+                }
+
+                window.P5HubCore.saveUserProfileLocal(mergedUser);
+                refreshHubUserBadge();
+                loadStreakUI();
+                renderGames();
+                updateTotalExpHeader();
+
+                const payload = window.P5HubCore.buildCloudProfilePayload(mergedUser);
+                await setDoc(docRef, payload, { merge: true });
+                return payload;
+            } catch (err) {
+                console.warn("Firestore profile sync error:", err);
+                return null;
+            }
+        };
+
+        // Trigger initial sync once module is ready
+        const initialU = window.P5HubCore.getSavedUser();
+        if (initialU) {
+            window.syncCloudProfileNow(initialU);
+        }
     </script>
 </body>
 </html>
